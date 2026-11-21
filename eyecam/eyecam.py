@@ -216,8 +216,6 @@ def list_cameras():
 
 def serve(port, parent, camera):
     tr = Tracker(camera)
-    th = threading.Thread(target=tr.run, daemon=True)
-    th.start()
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
@@ -226,6 +224,17 @@ def serve(port, parent, camera):
         print("port busy", flush=True)
         return 2
     srv.listen(1)
+    if sys.platform == "darwin":
+        # macOS：相機權限詢問只能在主執行緒跑（OpenCV 在背景執行緒無法跳出詢問視窗）→ 先在主執行緒開一次相機
+        try:
+            import cv2
+            c = cv2.VideoCapture(camera, cv2.CAP_AVFOUNDATION)
+            c.release()
+        except Exception:
+            pass
+        os.environ["OPENCV_AVFOUNDATION_SKIP_AUTH"] = "1"
+    th = threading.Thread(target=tr.run, daemon=True)
+    th.start()
     srv.settimeout(1.0)
     started = time.monotonic()
     last_client = time.monotonic()
