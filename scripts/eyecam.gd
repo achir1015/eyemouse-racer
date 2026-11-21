@@ -41,6 +41,8 @@ var _fy: OneEuro
 var _want_preview := false
 var _started_at := 0.0
 var _restarts := 0
+var web := false                 # 線上版：瀏覽器內 MediaPipe（web/eyecam_web.js），經 JavaScriptBridge 讀資料
+var _web_loaded := false
 
 
 class OneEuro:
@@ -76,7 +78,8 @@ class OneEuro:
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	enabled = not OS.has_feature("web") and not App.is_mobile()
+	web = OS.has_feature("web")
+	enabled = not App.is_mobile()
 	_fx = OneEuro.new(0.6, 0.004)
 	_fy = OneEuro.new(0.6, 0.004)
 	camera_index = int(App.settings.get("camera", 0))
@@ -84,7 +87,9 @@ func _ready() -> void:
 	if App.test_mode and not App.args.has("eyecam"):
 		return
 	if enabled and bool(App.settings.get("webcam", true)):
-		start()
+		# 線上版：已經校正過才自動開相機（第一次要到「眼控校正」才會詢問相機權限）
+		if not web or calibrated:
+			start()
 
 
 func _notification(what: int) -> void:
@@ -119,6 +124,9 @@ func start() -> void:
 		return
 	_started_at = Time.get_ticks_msec() / 1000.0
 	_set_status("starting")
+	if web:
+		_web_start()
+		return
 	# 先試著連線（可能已經在跑）；連不上才啟動
 	_try_connect()
 	await get_tree().create_timer(0.4).timeout
@@ -136,6 +144,12 @@ func start() -> void:
 
 
 func stop() -> void:
+	if web:
+		if _web_loaded:
+			JavaScriptBridge.eval("window.__ec && window.__ec.stop()", true)
+		linked = false
+		_set_status("off")
+		return
 	_send({"cmd": "quit"})
 	if _tcp:
 		_tcp.poll()
@@ -170,6 +184,8 @@ func ask_cameras() -> void:
 
 func set_preview(on: bool) -> void:
 	_want_preview = on
+	if web and _web_loaded:
+		JavaScriptBridge.eval("window.__ec.previewOn = %s" % ("true" if on else "false"), true)
 	_send({"cmd": "preview", "on": on})
 
 
@@ -184,8 +200,8 @@ func status_text() -> String:
 	match status:
 		"off": return "攝影機眼控：關閉"
 		"starting": return "攝影機眼控：啟動中…"
-		"nocam": return "攝影機眼控：找不到攝影機（請確認沒有其他程式在使用）"
-		"error": return "攝影機眼控：無法啟動追蹤程式"
+		"nocam": return "攝影機眼控：打不開攝影機（請在瀏覽器網址列允許使用相機）" if web else "攝影機眼控：找不到攝影機（請確認沒有其他程式在使用）"
+		"error": return "攝影機眼控：無法載入臉部追蹤（請確認網路連線）" if web else "攝影機眼控：無法啟動追蹤程式"
 		"noface": return "攝影機眼控：看不到臉，請正對攝影機"
 	if not calibrated:
 		return "攝影機眼控：已啟動，請先做校正（%d fps）" % int(fps)
@@ -206,6 +222,9 @@ func _send(obj: Dictionary) -> void:
 
 
 func _process(delta: float) -> void:
+	if web:
+		_web_poll()
+		return
 	if not _tcp:
 		return
 	_tcp.poll()
@@ -501,3 +520,39 @@ func _load_calib() -> void:
 	if typeof(d) == TYPE_DICTIONARY and d.has("wx") and (d.wx as Array).size() == 20:
 		calib = d
 		calibrated = true
+
+
+# ---------------------------------------------------------------- 線上版（瀏覽器）
+func _web_start() -> void:
+	if not _web_loaded:
+		var f := FileAccess.open("res://web/eyecam_web.js", FileAccess.READ)
+		if f == null:
+			_set_status("error")
+			return
+		JavaScriptBridge.eval(f.get_as_text(), true)
+		_web_loaded = true
+	JavaScriptBridge.eval("window.__ec.previewOn = %s; window.__ec.start()" % ("true" if _want_preview else "false"), true)
+
+
+func _web_poll() -> void:
+	if not _web_loaded:
+		return
+	var st := str(JavaScriptBridge.eval("window.__ec.status", true))
+	linked = st == "ok"
+	if st in ["starting", "nocam", "error"] and st != status:
+		_set_status(st)
+	elif st == "off" and status != "off":
+		_set_status("off")
+	var line := str(JavaScriptBridge.eval("window.__ec.pop()", true))
+	if line != "" and line != "<null>":
+		var m = JSON.parse_string(line)
+		if typeof(m) == TYPE_DICTIONARY:
+			_on_data(m)
+	if _want_preview:
+		var b64 := str(JavaScriptBridge.eval("window.__ec.popPreview()", true))
+		if b64 != "" and b64 != "<null>":
+			var img := Image.new()
+			if img.load_jpg_from_buffer(Marshalls.base64_to_raw(b64)) == OK:
+				preview.emit(img)
+	var now := Time.get_ticks_msec() / 1000.0
+	valid = linked and calibrated and face and now - _last_data < 0.4

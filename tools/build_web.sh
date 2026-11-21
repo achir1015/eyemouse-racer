@@ -8,6 +8,7 @@ GODOT="/e/從零建置 Godot 賽車遊戲/Godot_v4.7.2-stable_win64.exe/Godot_v4
 rm -rf "$ROOT/build/web" && mkdir -p "$ROOT/build/web" "$ROOT/build/release"
 "$GODOT" --headless --path . --import >/dev/null 2>&1 || true
 "$GODOT" --headless --path . --export-release "Web" "$ROOT/build/web/index.html" 2>&1 | grep -E "ERROR" || true
+cp eyecam/face_landmarker.task "$ROOT/build/web/"
 rm -f "$ROOT/build/release/EyeMouseRacer-web.zip"
 (cd "$ROOT/build/web" && powershell -NoProfile -Command "Compress-Archive -Path * -DestinationPath '$(cygpath -w "$ROOT/build/release")\EyeMouseRacer-web.zip'")
 ls -la "$ROOT/build/web" "$ROOT/build/release/EyeMouseRacer-web.zip"
