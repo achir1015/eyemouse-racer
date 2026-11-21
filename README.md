@@ -1,4 +1,7 @@
-# 眼動鼠之賽車
+# 眼動鼠之賽車 https://achir1015.github.io/eyemouse-racer/online/
+https://achir1015.github.io/eyemouse-racer/
+<img width="1920" height="1001" alt="image" src="https://github.com/user-attachments/assets/02dc61c4-c160-4b54-b2d7-0363a4aee3ff" />
+<img width="1920" height="1001" alt="image" src="https://github.com/user-attachments/assets/dd2fb6b7-6eea-4429-82f6-2f64cc680130" />
 
 用眼睛開賽車的 **3D 駕駛遊戲**（Godot 4.7.2，由寶島卡車專案延伸）：只要一台網路攝影機，眼睛和轉頭就能控制鏡頭，看著按鈕就能開車。
 
