@@ -40,6 +40,7 @@ var _fx: OneEuro
 var _fy: OneEuro
 var _want_preview := false
 var _started_at := 0.0
+var _restarts := 0
 
 
 class OneEuro:
@@ -232,6 +233,12 @@ func _process(delta: float) -> void:
 		_retry += delta
 		if _retry > 1.0:
 			_retry = 0.0
+			# 小程式意外結束：自動重新啟動（最多 3 次）
+			if _pid > 0 and not OS.is_process_running(_pid) and _restarts < 3:
+				_restarts += 1
+				_pid = -1
+				start()
+				return
 			# 小程式啟動要幾秒（載入模型）；超過 40 秒都連不上就算失敗
 			if Time.get_ticks_msec() / 1000.0 - _started_at > 40.0 and _pid > 0 and not OS.is_process_running(_pid):
 				_set_status("error")

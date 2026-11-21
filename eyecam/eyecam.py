@@ -68,10 +68,11 @@ def eye_feat(lm, eye, iris_pts):
     mid_y = (u.y + d.y) / 2
     v = (c.y - mid_y) / L
     open_ = abs(d.y - u.y) / L
-    return h, v, open_
+    return float(h), float(v), float(open_)
 
 
 def head_pose(mat):
+    mat = [[float(mat[r][c]) for c in range(4)] for r in range(4)]
     R = [[mat[r][c] for c in range(3)] for r in range(3)]
     yaw = math.degrees(math.atan2(-R[2][0], math.hypot(R[2][1], R[2][2])))
     pitch = math.degrees(math.atan2(R[2][1], R[2][2]))
@@ -148,7 +149,10 @@ class Tracker:
             if ts <= last_ts:
                 ts = last_ts + 1
             last_ts = ts
-            res = lmk.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
+            try:
+                res = lmk.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
+            except Exception:
+                continue
             n += 1
             fps_n += 1
             if time.monotonic() - fps_t > 1.0:
@@ -163,7 +167,7 @@ class Tracker:
                 bs = {}
                 if res.face_blendshapes:
                     for b in res.face_blendshapes[0]:
-                        bs[b.category_name] = b.score
+                        bs[b.category_name] = float(b.score)
                 yaw = pitch = roll = 0.0
                 tz = 0.0
                 if res.facial_transformation_matrixes:
@@ -176,7 +180,7 @@ class Tracker:
                     "bs": [round(bs.get(k, 0.0), 4) for k in BS_NAMES],
                     "hp": [round(yaw, 2), round(pitch, 2), round(roll, 2)],
                     "dist": round(tz, 1),
-                    "nose": [round(lm[NOSE].x, 4), round(lm[NOSE].y, 4)],
+                    "nose": [round(float(lm[NOSE].x), 4), round(float(lm[NOSE].y), 4)],
                 })
             with self.lock:
                 self.seq += 1
@@ -273,7 +277,11 @@ def serve(port, parent, camera):
                     conn.sendall((json.dumps({"ev": "status", "status": tr.status, "camera": tr.camera}) + "\n").encode())
                 if seq != sent_seq and latest is not None:
                     sent_seq = seq
-                    conn.sendall((json.dumps(latest, separators=(",", ":")) + "\n").encode())
+                    try:
+                        line = json.dumps(latest, separators=(",", ":"), default=float)
+                    except (TypeError, ValueError):
+                        line = json.dumps({"t": latest.get("t", 0), "face": 0})
+                    conn.sendall((line + "\n").encode())
                 if tr.preview_on and prev is not None and prev is not last_prev:
                     last_prev = prev
                     conn.sendall((json.dumps({"ev": "preview", "jpg": prev}) + "\n").encode())

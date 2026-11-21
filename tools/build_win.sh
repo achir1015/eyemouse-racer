@@ -23,6 +23,6 @@ for i in 1 2 3; do
   (cd platform/windows && "$ISCC" //Q //DAppVersion="$VERSION" installer.iss) && break
   echo "ISCC 失敗，重試 $i"; sleep 3
 done
-rm -f "$REL/EyeMouseRacer-Windows-portable.zip"
+rm -f "$REL/EyeMouseRacer-Windows-portable.zip"; rm -rf "$ROOT/build/windows/eyecam"
 (cd "$ROOT/build/windows" && powershell -NoProfile -Command "Copy-Item -Recurse -Force '$(cygpath -w "$ROOT/build/eyecam/EyeCam")' eyecam; Compress-Archive -Path EyeMouseRacer.exe,eyecam -DestinationPath '$(cygpath -w "$REL")\EyeMouseRacer-Windows-portable.zip'")
 ls -la "$REL"
